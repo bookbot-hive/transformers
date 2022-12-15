@@ -65,7 +65,7 @@ def list_field(default=None, metadata=None):
 class DistillationTrainer(Trainer):
     def __init__(self, *args, teacher_model=None, **kwargs):
         super().__init__(*args, **kwargs)
-        self.teacher_model = teacher_model.to(args.device)
+        self.teacher_model = teacher_model
 
     def compute_loss(self, model, inputs, return_outputs=False):
         outputs_stu = model(**inputs)
@@ -501,7 +501,7 @@ def main():
         model_args.model_name_or_path,
         cache_dir=model_args.cache_dir,
         use_auth_token=data_args.use_auth_token,
-    )
+    ).to(training_args.device)
 
     # create student model of smaller size
     # TODO: refactor num hidden size
