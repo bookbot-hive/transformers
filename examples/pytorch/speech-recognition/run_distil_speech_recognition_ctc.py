@@ -62,13 +62,6 @@ def list_field(default=None, metadata=None):
     return field(default_factory=lambda: default, metadata=metadata)
 
 
-class DistillationTrainingArguments(TrainingArguments):
-    alpha: float = field(
-        default=0.5, metadata={"help": "Hyperparameter to control the relative strength of each loss."}
-    )
-    temperature: float = field(default=2.0, metadata={"help": "Scale factor of logits to soften the probabilities."})
-
-
 class DistillationTrainer(Trainer):
     def __init__(self, *args, teacher_model=None, **kwargs):
         super().__init__(*args, **kwargs)
@@ -92,6 +85,18 @@ class DistillationTrainer(Trainer):
         # Return weighted student loss
         loss = self.args.alpha * loss_ce + (1.0 - self.args.alpha) * loss_kd
         return (loss, outputs_stu) if return_outputs else loss
+
+
+@dataclass
+class DistillationTrainingArguments:
+    """
+    Arguments pertaining to distillation settings.
+    """
+
+    alpha: float = field(
+        default=0.5, metadata={"help": "Hyperparameter to control the relative strength of each loss."}
+    )
+    temperature: float = field(default=2.0, metadata={"help": "Scale factor of logits to soften the probabilities."})
 
 
 @dataclass
@@ -356,60 +361,26 @@ class DataCollatorCTCWithPadding:
         return batch
 
 
-def create_vocabulary_from_data(
-    datasets: DatasetDict,
-    word_delimiter_token: Optional[str] = None,
-    unk_token: Optional[str] = None,
-    pad_token: Optional[str] = None,
-):
-    # Given training and test labels create vocabulary
-    def extract_all_chars(batch):
-        all_text = " ".join(batch["target_text"])
-        vocab = list(set(all_text))
-        return {"vocab": [vocab], "all_text": [all_text]}
-
-    vocabs = datasets.map(
-        extract_all_chars,
-        batched=True,
-        batch_size=-1,
-        keep_in_memory=True,
-        remove_columns=datasets["train"].column_names,
-    )
-
-    # take union of all unique characters in each dataset
-    vocab_set = functools.reduce(
-        lambda vocab_1, vocab_2: set(vocab_1["vocab"][0]) | set(vocab_2["vocab"][0]), vocabs.values()
-    )
-
-    vocab_dict = {v: k for k, v in enumerate(sorted(list(vocab_set)))}
-
-    # replace white space with delimiter token
-    if word_delimiter_token is not None:
-        vocab_dict[word_delimiter_token] = vocab_dict[" "]
-        del vocab_dict[" "]
-
-    # add unk and pad token
-    if unk_token is not None:
-        vocab_dict[unk_token] = len(vocab_dict)
-
-    if pad_token is not None:
-        vocab_dict[pad_token] = len(vocab_dict)
-
-    return vocab_dict
-
-
 def main():
     # See all possible arguments in src/transformers/training_args.py
     # or by passing the --help flag to this script.
     # We now keep distinct sets of args, for a cleaner separation of concerns.
 
-    parser = HfArgumentParser((ModelArguments, DataTrainingArguments, DistillationTrainingArguments))
+    parser = HfArgumentParser(
+        (ModelArguments, DataTrainingArguments, TrainingArguments, DistillationTrainingArguments)
+    )
     if len(sys.argv) == 2 and sys.argv[1].endswith(".json"):
         # If we pass only one argument to the script and it's the path to a json file,
         # let's parse it to get our arguments.
-        model_args, data_args, training_args = parser.parse_json_file(json_file=os.path.abspath(sys.argv[1]))
+        model_args, data_args, training_args, distil_args = parser.parse_json_file(
+            json_file=os.path.abspath(sys.argv[1])
+        )
     else:
-        model_args, data_args, training_args = parser.parse_args_into_dataclasses()
+        model_args, data_args, training_args, distil_args = parser.parse_args_into_dataclasses()
+
+    # copy values in DistillationTrainingArguments to TrainingArguments
+    training_args.alpha = distil_args.alpha
+    training_args.temperature = distil_args.temperature
 
     # Sending telemetry. Tracking the example usage helps us better allocate resources to maintain them. The
     # information sent is the one passed as arguments along with your Python/PyTorch versions.
