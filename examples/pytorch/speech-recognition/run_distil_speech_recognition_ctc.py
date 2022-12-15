@@ -379,6 +379,8 @@ def main():
         model_args, data_args, training_args, distil_args = parser.parse_args_into_dataclasses()
 
     # copy values in DistillationTrainingArguments to TrainingArguments
+    # TODO: this could be improved either by merging with TrainingArguments (unclear how)
+    # or cleanly copying every attribute
     training_args.alpha = distil_args.alpha
     training_args.temperature = distil_args.temperature
 
@@ -501,11 +503,14 @@ def main():
         model_args.model_name_or_path,
         cache_dir=model_args.cache_dir,
         use_auth_token=data_args.use_auth_token,
-    ).to(training_args.device)
+    )
+
+    # TODO: may not be compatible with all kinds of devices
+    teacher = teacher.to(training_args.device)
 
     # create student model of smaller size
     # TODO: refactor num hidden size
-    num_hidden_size = 6
+    num_hidden_size = 8
     config = AutoConfig.from_pretrained(
         model_args.model_name_or_path,
         num_hidden_layers=num_hidden_size,
@@ -525,7 +530,7 @@ def main():
     student_weights = student.state_dict()
 
     # TODO: refactor which teacher blocks to copy
-    teacher_blocks = [0, 2, 4, 6, 8, 10]  # maybe just take every even?
+    teacher_blocks = [0, 1, 4, 5, 8, 9, 10, 11]  # maybe just take every even?
     assert len(teacher_blocks) == num_hidden_size
 
     teacher_weight_dict = {}
