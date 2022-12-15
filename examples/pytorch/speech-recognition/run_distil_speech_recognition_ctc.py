@@ -65,7 +65,7 @@ def list_field(default=None, metadata=None):
 class DistillationTrainer(Trainer):
     def __init__(self, *args, teacher_model=None, **kwargs):
         super().__init__(*args, **kwargs)
-        self.teacher_model = teacher_model
+        self.teacher_model = teacher_model.to(args.device)
 
     def compute_loss(self, model, inputs, return_outputs=False):
         outputs_stu = model(**inputs)
