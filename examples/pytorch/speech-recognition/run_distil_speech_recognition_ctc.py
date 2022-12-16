@@ -15,14 +15,12 @@
 
 """ Fine-tuning a 🤗 Transformers CTC model for automatic speech recognition"""
 
-import functools
-import json
 import logging
 import os
 import re
 import sys
 import warnings
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, asdict
 from typing import Dict, List, Optional, Union
 
 import datasets
@@ -97,6 +95,15 @@ class DistillationTrainingArguments:
         default=0.5, metadata={"help": "Hyperparameter to control the relative strength of each loss."}
     )
     temperature: float = field(default=2.0, metadata={"help": "Scale factor of logits to soften the probabilities."})
+    layer_prefix: str = field(
+        default=None,
+        metadata={"help": "Layer name prefix to copy from teacher model. E.g. `wav2vec2.encoder.layers`."},
+    )
+    delimiter: str = field(default=".", metadata={"help": "Layer name components delimiter."})
+    teacher_blocks: List[str] = list_field(
+        default=None,
+        metadata={"help": "A list of teacher block indices to copy from. E.g. `'0 2 4 6 8 10'`"},
+    )
 
 
 @dataclass
@@ -378,11 +385,9 @@ def main():
     else:
         model_args, data_args, training_args, distil_args = parser.parse_args_into_dataclasses()
 
-    # copy values in DistillationTrainingArguments to TrainingArguments
-    # TODO: this could be improved either by merging with TrainingArguments (unclear how)
-    # or cleanly copying every attribute
-    training_args.alpha = distil_args.alpha
-    training_args.temperature = distil_args.temperature
+    # copy alpha and temperature values from DistillationTrainingArguments to TrainingArguments
+    for key, value in asdict(distil_args).items():
+        setattr(training_args, key, value)
 
     # Sending telemetry. Tracking the example usage helps us better allocate resources to maintain them. The
     # information sent is the one passed as arguments along with your Python/PyTorch versions.
@@ -508,12 +513,15 @@ def main():
     # TODO: may not be compatible with all kinds of devices
     teacher = teacher.to(training_args.device)
 
+    # index of layer number in layer name
+    layer_num_idx: int = len(distil_args.layer_prefix.split(distil_args.delimiter))
+    num_hidden_layers: int = len(distil_args.teacher_blocks)
+    assert num_hidden_layers <= teacher.config.num_hidden_layers
+
     # create student model of smaller size
-    # TODO: refactor num hidden size
-    num_hidden_size = 8
     config = AutoConfig.from_pretrained(
         model_args.model_name_or_path,
-        num_hidden_layers=num_hidden_size,
+        num_hidden_layers=num_hidden_layers,
         cache_dir=model_args.cache_dir,
         use_auth_token=data_args.use_auth_token,
     )
@@ -526,30 +534,20 @@ def main():
     )
 
     # initialize student's weights from teacher's
-    teacher_weights = teacher.state_dict()
-    student_weights = student.state_dict()
-
-    # TODO: refactor which teacher blocks to copy
-    teacher_blocks = [0, 1, 4, 5, 8, 9, 10, 11]  # maybe just take every even?
-    assert len(teacher_blocks) == num_hidden_size
-
-    teacher_weight_dict = {}
-
-    # TODO: clean this up
-    for name, param in teacher_weights.items():
-        q = "wav2vec2.encoder.layers."
-        if name.startswith(q):
-            layer_num = name.split(".")[3]
-            if int(layer_num) in teacher_blocks:
-                teacher_weight_dict[name] = param
+    teacher_weights: Dict[str, torch.Tensor] = teacher.state_dict()
+    student_weights: Dict[str, torch.Tensor] = student.state_dict()
 
     for name, param in student_weights.items():
-        q = "wav2vec2.encoder.layers."
-        if name.startswith(q):
-            student_layer_names = name.split(".")
-            student_layer_names[3] = str(teacher_blocks[int(student_layer_names[3])])
-            teacher_layer_name = ".".join(student_layer_names)
-            param.copy_(teacher_weight_dict[teacher_layer_name])
+        if name.startswith(distil_args.layer_prefix):
+            # split layer name to its components
+            student_layer_name_comps = name.split(distil_args.delimiter)
+            student_layer_num = student_layer_name_comps[layer_num_idx]
+            # replace the layer num with teacher's layer num
+            student_layer_name_comps[layer_num_idx] = distil_args.teacher_blocks[int(student_layer_num)]
+            # join to get teacher's layer name
+            teacher_layer_name = distil_args.delimiter.join(student_layer_name_comps)
+            # in-place copy to student params
+            param.copy_(teacher_weights[teacher_layer_name])
 
     # freeze encoder
     if model_args.freeze_feature_encoder:
