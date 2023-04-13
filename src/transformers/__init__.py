@@ -239,6 +239,12 @@ _import_structure = {
     ],
     "models.codegen": ["CODEGEN_PRETRAINED_CONFIG_ARCHIVE_MAP", "CodeGenConfig", "CodeGenTokenizer"],
     "models.conditional_detr": ["CONDITIONAL_DETR_PRETRAINED_CONFIG_ARCHIVE_MAP", "ConditionalDetrConfig"],
+    "models.conformer": [
+        "CONFORMER_PRETRAINED_CONFIG_ARCHIVE_MAP",
+        "ConformerConfig",
+        "ConformerFeatureExtractor",
+        "ConformerProcessor",
+    ],
     "models.convbert": ["CONVBERT_PRETRAINED_CONFIG_ARCHIVE_MAP", "ConvBertConfig", "ConvBertTokenizer"],
     "models.convnext": ["CONVNEXT_PRETRAINED_CONFIG_ARCHIVE_MAP", "ConvNextConfig"],
     "models.convnextv2": ["CONVNEXTV2_PRETRAINED_CONFIG_ARCHIVE_MAP", "ConvNextV2Config"],
@@ -1291,6 +1297,15 @@ else:
             "ConditionalDetrForSegmentation",
             "ConditionalDetrModel",
             "ConditionalDetrPreTrainedModel",
+        ]
+    )
+    _import_structure["models.conformer"].extend(
+        [
+            "CONFORMER_PRETRAINED_MODEL_ARCHIVE_LIST",
+            "ConformerForCTC",
+            "ConformerModel",
+            "ConformerForPreTraining",
+            "ConformerPreTrainedModel",
         ]
     )
     _import_structure["models.convbert"].extend(
@@ -3938,6 +3953,7 @@ if TYPE_CHECKING:
     )
     from .models.codegen import CODEGEN_PRETRAINED_CONFIG_ARCHIVE_MAP, CodeGenConfig, CodeGenTokenizer
     from .models.conditional_detr import CONDITIONAL_DETR_PRETRAINED_CONFIG_ARCHIVE_MAP, ConditionalDetrConfig
+    from .models.conformer import CONFORMER_PRETRAINED_CONFIG_ARCHIVE_MAP, ConformerConfig, ConformerFeatureExtractor, ConformerProcessor
     from .models.convbert import CONVBERT_PRETRAINED_CONFIG_ARCHIVE_MAP, ConvBertConfig, ConvBertTokenizer
     from .models.convnext import CONVNEXT_PRETRAINED_CONFIG_ARCHIVE_MAP, ConvNextConfig
     from .models.convnextv2 import CONVNEXTV2_PRETRAINED_CONFIG_ARCHIVE_MAP, ConvNextV2Config
@@ -4862,6 +4878,13 @@ if TYPE_CHECKING:
             ConditionalDetrForSegmentation,
             ConditionalDetrModel,
             ConditionalDetrPreTrainedModel,
+        )
+        from .models.conformer import (
+            CONFORMER_PRETRAINED_MODEL_ARCHIVE_LIST,
+            ConformerForCTC,
+            ConformerModel,
+            ConformerForPreTraining,
+            ConformerPreTrainedModel,
         )
         from .models.convbert import (
             CONVBERT_PRETRAINED_MODEL_ARCHIVE_LIST,
